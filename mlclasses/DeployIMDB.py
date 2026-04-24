@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import re
-import nltk
+# import nltk
 from pathlib import Path
 from nltk.corpus import stopwords
 from sklearn.feature_extraction.text import TfidfVectorizer
