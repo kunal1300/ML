@@ -220,18 +220,29 @@ elif source == "Live Webcam":
     st.header("🎥 Mobile-Ready Webcam Tracking")
     st.write("This uses WebRTC to access your phone or computer's camera directly in the browser!")
     
-    RTC_CONFIGURATION = RTCConfiguration(
-        {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
-    )
+    RTC_CONFIGURATION = RTCConfiguration({
+        "iceServers": [
+            {"urls": ["stun:stun.l.google.com:19302"]},
+            {"urls": ["stun:stun1.l.google.com:19302"]},
+            {"urls": ["stun:stun2.l.google.com:19302"]},
+            {"urls": ["stun:stun.twilio.com:3478"]}
+        ]
+    })
     
     def video_frame_callback(frame: av.VideoFrame) -> av.VideoFrame:
-        img = frame.to_ndarray(format="bgr24")
-        
-        # Object Tracking
-        results = model.track(img, conf=conf_threshold, classes=selected_indices, persist=True)
-        img_with_boxes, detected_classes, _ = process_results(results, img.shape)
-        
-        return av.VideoFrame.from_ndarray(img_with_boxes, format="bgr24")
+        try:
+            img = frame.to_ndarray(format="bgr24")
+            
+            # Object Tracking
+            results = model.track(img, conf=conf_threshold, classes=selected_indices, persist=True)
+            img_with_boxes, detected_classes, _ = process_results(results, img.shape)
+            
+            return av.VideoFrame.from_ndarray(img_with_boxes, format="bgr24")
+        except Exception as e:
+            import cv2
+            img = frame.to_ndarray(format="bgr24")
+            cv2.putText(img, f"Error: {str(e)}", (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+            return av.VideoFrame.from_ndarray(img, format="bgr24")
         
     webrtc_streamer(
         key="object-detection",
