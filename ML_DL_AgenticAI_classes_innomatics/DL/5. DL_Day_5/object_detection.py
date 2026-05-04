@@ -71,7 +71,7 @@ st.sidebar.write("Filter detections by screen area (%)")
 roi_y_min, roi_y_max = st.sidebar.slider("Y-Axis (Top to Bottom)", 0, 100, (0, 100))
 roi_x_min, roi_x_max = st.sidebar.slider("X-Axis (Left to Right)", 0, 100, (0, 100))
 
-source = st.sidebar.radio("5. Select Source", ["Image Upload", "Video Upload", "Live Webcam (Local PC)", "Live Webcam (WebRTC/Cloud)", "Mobile Camera Snapshot"])
+source = st.sidebar.radio("5. Select Source", ["Image Upload", "Video Upload", "Live Webcam (Local PC)", "Live Webcam (WebRTC/Cloud)", "Camera Snapshot (Web Browser)"])
 
 def process_results(results, frame_shape):
     """Helper to process results, apply ROI, and extract info"""
@@ -255,8 +255,8 @@ elif source == "Live Webcam (WebRTC/Cloud)":
     
     st.info("💡 Note: The live counts of detected objects are drawn directly onto your video feed so they stay in perfect sync on mobile devices!")
 
-elif source == "Mobile Camera Snapshot":
-    st.header("📱 Mobile Camera Snapshot")
+elif source == "Camera Snapshot (Web Browser)":
+    st.header("📸 Browser Camera Snapshot")
     st.write("If strict firewalls or mobile carriers are blocking the live WebRTC video stream, use this mode to instantly capture and process a live photo directly from your camera!")
     
     img_file_buffer = st.camera_input("Take a picture")
