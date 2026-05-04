@@ -1,27 +1,41 @@
 import streamlit as st
-import cv2
 
-st.title("Face Detection with openCV")
+import cv2 
 
-start =st.button("Start Camera")
+st.title("Face Detection with OpenCV")
+
+start = st.button("Start Camera")
 
 face_cascade = cv2.CascadeClassifier(
+
     cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
-    )
-    
+
+)
+
+frame_placeholder = st.empty()
+
 if start:
-    video_capture = cv2.VideoCapture(0)
+
+    cap= cv2.VideoCapture(0)
+
     while True:
-        ret, frame = video_capture.read()
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
-        for (x, y, w, h) in faces:
-            cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
-        cv2.imshow("Video", frame)
-        if cv2.waitKey(1) & 0xFF == ord("q"):
-            break           
 
+        ret, frame = cap.read()
 
- 
+        if not ret:
+
+            break
+
         
-                                              
+
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+        faces = face_cascade.detectMultiScale(gray, 1.3, 5)
+
+        for (x,y,w,h) in faces:
+
+            cv2.rectangle(frame, (x,y), (x+w, y+h),(0,255,0),2)
+
+        frame_placeholder.image(frame, channels="BGR")
+
+    cap.release()
