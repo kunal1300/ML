@@ -298,7 +298,7 @@ elif source == "Live Webcam (Local PC)":
     history = []
     
     if run:
-        cap = cv2.VideoCapture(0)
+        cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
         if not cap.isOpened():
             st.error("🚨 Error: Could not access your physical webcam. \n\n1. Check if your laptop has a webcam.\n2. Ensure it is not currently being used by Zoom/Teams.\n3. Check Windows Settings > Privacy > Camera to allow desktop apps access.")
         else:
