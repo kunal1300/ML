@@ -71,7 +71,7 @@ st.sidebar.write("Filter detections by screen area (%)")
 roi_y_min, roi_y_max = st.sidebar.slider("Y-Axis (Top to Bottom)", 0, 100, (0, 100))
 roi_x_min, roi_x_max = st.sidebar.slider("X-Axis (Left to Right)", 0, 100, (0, 100))
 
-source = st.sidebar.radio("5. Select Source", ["Image Upload", "Video Upload", "Live Webcam"])
+source = st.sidebar.radio("5. Select Source", ["Image Upload", "Video Upload", "Live Webcam", "Mobile Camera Snapshot"])
 
 def process_results(results, frame_shape):
     """Helper to process results, apply ROI, and extract info"""
@@ -243,3 +243,29 @@ elif source == "Live Webcam":
     )
     
     st.info("💡 Note: The live counts of detected objects are drawn directly onto your video feed so they stay in perfect sync on mobile devices!")
+
+elif source == "Mobile Camera Snapshot":
+    st.header("📱 Mobile Camera Snapshot")
+    st.write("If strict firewalls or mobile carriers are blocking the live WebRTC video stream, use this mode to instantly capture and process a live photo directly from your camera!")
+    
+    img_file_buffer = st.camera_input("Take a picture")
+    
+    if img_file_buffer is not None:
+        with st.spinner("Processing..."):
+            image = Image.open(img_file_buffer)
+            img_array = np.array(image)
+            
+            results = model(img_array, conf=conf_threshold, classes=selected_indices)
+            img_with_boxes, detected_classes, df = process_results(results, img_array.shape)
+            
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.image(img_with_boxes, caption="Detection Result", use_container_width=True)
+            with col2:
+                st.subheader("Detected")
+                class_counts = Counter(detected_classes)
+                if not class_counts:
+                    st.info("No objects detected...")
+                else:
+                    for obj, count in class_counts.items():
+                        st.success(f"**{obj.capitalize()}**: {count}")
