@@ -6,6 +6,7 @@ dependencies:
   - python=3.10
   - glib
   - libgl-devel
+  - av
   - pip
   - pip:
     - --extra-index-url https://download.pytorch.org/whl/cpu
@@ -17,3 +18,4 @@ dependencies:
     - numpy
     - pillow
     - pandas
+    - streamlit-webrtc

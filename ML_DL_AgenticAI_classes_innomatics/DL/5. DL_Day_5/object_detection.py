@@ -19,6 +19,8 @@ import pandas as pd
 import io
 import tempfile
 import os
+from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration
+import av
 
 # Set page configuration
 st.set_page_config(page_title="Advanced Object Detection", layout="wide")
@@ -215,49 +217,29 @@ elif source == "Video Upload":
             st.success("Video processing complete!")
 
 elif source == "Live Webcam":
-    st.header("🎥 Webcam Tracking & Analytics")
-    run = st.checkbox("Start Webcam")
+    st.header("🎥 Mobile-Ready Webcam Tracking")
+    st.write("This uses WebRTC to access your phone or computer's camera directly in the browser!")
     
-    col1, col2 = st.columns([3, 1])
-    with col1: 
-        FRAME_WINDOW = st.image([])
-    with col2: 
-        stats_placeholder = st.empty()
-        alert_placeholder = st.empty()
+    RTC_CONFIGURATION = RTCConfiguration(
+        {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
+    )
+    
+    def video_frame_callback(frame: av.VideoFrame) -> av.VideoFrame:
+        img = frame.to_ndarray(format="bgr24")
         
-    st.subheader("📈 Detection History (Total Objects Over Time)")
-    chart_placeholder = st.empty()
-    history = []
+        # Object Tracking
+        results = model.track(img, conf=conf_threshold, classes=selected_indices, persist=True)
+        img_with_boxes, detected_classes, _ = process_results(results, img.shape)
+        
+        return av.VideoFrame.from_ndarray(img_with_boxes, format="bgr24")
+        
+    webrtc_streamer(
+        key="object-detection",
+        mode=WebRtcMode.SENDRECV,
+        rtc_configuration=RTC_CONFIGURATION,
+        video_frame_callback=video_frame_callback,
+        media_stream_constraints={"video": True, "audio": False},
+        async_processing=True,
+    )
     
-    if run:
-        cap = cv2.VideoCapture(0)
-        while run:
-            ret, frame = cap.read()
-            if not ret: break
-            
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            
-            # Object Tracking
-            results = model.track(frame, conf=conf_threshold, classes=selected_indices, persist=True)
-            img_with_boxes, detected_classes, _ = process_results(results, frame.shape)
-            
-            FRAME_WINDOW.image(img_with_boxes)
-            
-            class_counts = Counter(detected_classes)
-            with stats_placeholder.container():
-                if not class_counts:
-                    st.info("No objects detected...")
-                else:
-                    for obj, count in class_counts.items():
-                        st.success(f"**{obj.capitalize()}**: {count}")
-            
-            history.append(len(detected_classes))
-            if len(history) > 100: history.pop(0)
-            chart_placeholder.line_chart(history)
-            
-            if alert_target in detected_classes:
-                alert_placeholder.error(f"🚨 {alert_target.upper()} DETECTED!")
-            else:
-                alert_placeholder.empty()
-                
-        cap.release()
+    st.info("💡 Note: The live counts of detected objects are drawn directly onto your video feed so they stay in perfect sync on mobile devices!")
