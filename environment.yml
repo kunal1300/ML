@@ -19,3 +19,4 @@ dependencies:
     - pillow
     - pandas
     - streamlit-webrtc
+    - tornado<6.2
