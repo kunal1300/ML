@@ -1,3 +1,14 @@
+import os
+# --- STREAMLIT CLOUD DEPLOYMENT FIX ---
+# Streamlit Cloud's Debian server is currently failing to install libglib2.0-0.
+# Because Ultralytics forces the full 'opencv-python' installation, it crashes.
+# This script forcefully strips out the GUI version and replaces it with headless.
+try:
+    import cv2
+except ImportError:
+    os.system("pip uninstall -y opencv-python opencv-python-headless")
+    os.system("pip install opencv-python-headless")
+
 import streamlit as st
 from ultralytics import YOLO
 import cv2
