@@ -71,7 +71,7 @@ st.sidebar.write("Filter detections by screen area (%)")
 roi_y_min, roi_y_max = st.sidebar.slider("Y-Axis (Top to Bottom)", 0, 100, (0, 100))
 roi_x_min, roi_x_max = st.sidebar.slider("X-Axis (Left to Right)", 0, 100, (0, 100))
 
-source = st.sidebar.radio("5. Select Source", ["Image Upload", "Video Upload", "Live Webcam", "Mobile Camera Snapshot"])
+source = st.sidebar.radio("5. Select Source", ["Image Upload", "Video Upload", "Live Webcam (Local PC)", "Live Webcam (WebRTC/Cloud)", "Mobile Camera Snapshot"])
 
 def process_results(results, frame_shape):
     """Helper to process results, apply ROI, and extract info"""
@@ -216,8 +216,8 @@ elif source == "Video Upload":
             cap.release()
             st.success("Video processing complete!")
 
-elif source == "Live Webcam":
-    st.header("🎥 Mobile-Ready Webcam Tracking")
+elif source == "Live Webcam (WebRTC/Cloud)":
+    st.header("🌐 Cloud/Mobile Webcam Tracking")
     st.write("This uses WebRTC to access your phone or computer's camera directly in the browser!")
     
     RTC_CONFIGURATION = RTCConfiguration({
@@ -280,3 +280,52 @@ elif source == "Mobile Camera Snapshot":
                 else:
                     for obj, count in class_counts.items():
                         st.success(f"**{obj.capitalize()}**: {count}")
+
+elif source == "Live Webcam (Local PC)":
+    st.header("💻 Local PC Webcam Tracking")
+    st.write("This uses standard OpenCV to access your computer's built-in webcam. (Note: This only works when running locally on your laptop!)")
+    run = st.checkbox("Start Local Webcam")
+    
+    col1, col2 = st.columns([3, 1])
+    with col1: 
+        FRAME_WINDOW = st.image([])
+    with col2: 
+        stats_placeholder = st.empty()
+        alert_placeholder = st.empty()
+        
+    st.subheader("📈 Detection History (Total Objects Over Time)")
+    chart_placeholder = st.empty()
+    history = []
+    
+    if run:
+        cap = cv2.VideoCapture(0)
+        while run:
+            ret, frame = cap.read()
+            if not ret: break
+            
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            
+            # Object Tracking
+            results = model.track(frame, conf=conf_threshold, classes=selected_indices, persist=True)
+            img_with_boxes, detected_classes, _ = process_results(results, frame.shape)
+            
+            FRAME_WINDOW.image(img_with_boxes)
+            
+            class_counts = Counter(detected_classes)
+            with stats_placeholder.container():
+                if not class_counts:
+                    st.info("No objects detected...")
+                else:
+                    for obj, count in class_counts.items():
+                        st.success(f"**{obj.capitalize()}**: {count}")
+            
+            history.append(len(detected_classes))
+            if len(history) > 100: history.pop(0)
+            chart_placeholder.line_chart(history)
+            
+            if alert_target in detected_classes:
+                alert_placeholder.error(f"🚨 {alert_target.upper()} DETECTED!")
+            else:
+                alert_placeholder.empty()
+                
+        cap.release()
