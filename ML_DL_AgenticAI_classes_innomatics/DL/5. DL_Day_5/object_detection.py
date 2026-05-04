@@ -299,11 +299,16 @@ elif source == "Live Webcam (Local PC)":
     
     if run:
         cap = cv2.VideoCapture(0)
-        while run:
-            ret, frame = cap.read()
-            if not ret: break
-            
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        if not cap.isOpened():
+            st.error("🚨 Error: Could not access your physical webcam. \n\n1. Check if your laptop has a webcam.\n2. Ensure it is not currently being used by Zoom/Teams.\n3. Check Windows Settings > Privacy > Camera to allow desktop apps access.")
+        else:
+            while run:
+                ret, frame = cap.read()
+                if not ret: 
+                    st.error("Error: Failed to read frame from camera. Connection lost.")
+                    break
+                
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             
             # Object Tracking
             results = model.track(frame, conf=conf_threshold, classes=selected_indices, persist=True)
