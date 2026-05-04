@@ -238,7 +238,7 @@ elif source == "Live Webcam":
         mode=WebRtcMode.SENDRECV,
         rtc_configuration=RTC_CONFIGURATION,
         video_frame_callback=video_frame_callback,
-        media_stream_constraints={"video": True, "audio": False},
+        media_stream_constraints={"video": {"facingMode": "environment"}, "audio": False},
         async_processing=True,
     )
     
