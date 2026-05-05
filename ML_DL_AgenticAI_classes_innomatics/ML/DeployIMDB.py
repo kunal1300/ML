@@ -1,4 +1,7 @@
 import streamlit as st
+import streamlit.components.v1 as components
+from collections import Counter
+import json
 import pandas as pd
 import re
 import nltk
@@ -164,6 +167,96 @@ elif menu == "3. Sentiment Analyzer 🤖":
                     ).properties(height=150)
                     st.altair_chart(prob_chart, use_container_width=True)
 
+                # --- Word Frequency Cloud ---
+                st.divider()
+                st.subheader("🔤 Word Frequency Cloud")
+                st.caption("Bigger = more frequently used in your review. Smaller = used less.")
+
+                word_list = cleaned.split()
+                word_freq = Counter(word_list)
+
+                if word_freq:
+                    # Sort by frequency descending, take top 60
+                    top_words = word_freq.most_common(60)
+                    max_freq = top_words[0][1]
+                    min_freq = top_words[-1][1]
+
+                    words_json = json.dumps(
+                        [{"text": w, "count": c} for w, c in top_words]
+                    )
+
+                    html_code = f"""
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  body {{
+    background: #0e1117;
+    margin: 0;
+    padding: 10px;
+    font-family: 'Segoe UI', sans-serif;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 10px 16px;
+    min-height: 220px;
+    box-sizing: border-box;
+  }}
+  .word {{
+    display: inline-block;
+    cursor: default;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+    line-height: 1.2;
+    border-radius: 4px;
+    padding: 2px 4px;
+  }}
+  .word:hover {{
+    transform: scale(1.18);
+    opacity: 1 !important;
+  }}
+</style>
+</head>
+<body>
+<script>
+  const words = {words_json};
+  const maxFreq = {max_freq};
+  const minFreq = {min_freq};
+  const colors = [
+    '#00b0f0','#ff4b4b','#f5a623','#7ed321','#bd10e0',
+    '#50e3c2','#ff6b6b','#4ecdc4','#ffe66d','#a78bfa'
+  ];
+
+  const body = document.body;
+  words.forEach((item, i) => {{
+    const span = document.createElement('span');
+    span.classList.add('word');
+    span.textContent = item.text;
+
+    // Map frequency to font size: 14px (min) to 64px (max)
+    const ratio = maxFreq === minFreq
+      ? 1
+      : (item.count - minFreq) / (maxFreq - minFreq);
+    const fontSize = Math.round(14 + ratio * 50);
+    span.style.fontSize = fontSize + 'px';
+
+    // Opacity proportional to size
+    span.style.opacity = (0.55 + ratio * 0.45).toFixed(2);
+
+    // Cycle through palette
+    span.style.color = colors[i % colors.length];
+    span.title = `"${{item.text}}" used ${{item.count}} time${{item.count > 1 ? 's' : ''}}` ;
+
+    body.appendChild(span);
+  }});
+</script>
+</body>
+</html>
+"""
+                    components.html(html_code, height=280, scrolling=False)
+                else:
+                    st.info("No significant words found after cleaning. Try a longer review.")
+
     with tab2:
         st.subheader("Batch Operations")
         st.markdown("Upload a file containing multiple reviews, and the model will predict sentiments for automatically.")
@@ -191,7 +284,92 @@ elif menu == "3. Sentiment Analyzer 🤖":
                         
                         st.success("Prediction complete!")
                         st.dataframe(user_df[[text_col, 'Predicted_Sentiment', 'Positive_Confidence', 'Negative_Confidence']].head(20), use_container_width=True)
-                        
+
+                        # --- Word Frequency Cloud (Bulk) ---
+                        st.divider()
+                        st.subheader("🔤 Word Frequency Cloud — All Reviews")
+                        st.caption("Bigger = more frequently used across all uploaded reviews. Hover to see exact count.")
+
+                        all_words = " ".join(cleaned_texts).split()
+                        bulk_word_freq = Counter(all_words)
+
+                        if bulk_word_freq:
+                            top_words_bulk = bulk_word_freq.most_common(60)
+                            max_freq_b = top_words_bulk[0][1]
+                            min_freq_b = top_words_bulk[-1][1]
+
+                            words_json_bulk = json.dumps(
+                                [{"text": w, "count": c} for w, c in top_words_bulk]
+                            )
+
+                            html_bulk = f"""
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  body {{
+    background: #0e1117;
+    margin: 0;
+    padding: 14px;
+    font-family: 'Segoe UI', sans-serif;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 12px 18px;
+    min-height: 240px;
+    box-sizing: border-box;
+  }}
+  .word {{
+    display: inline-block;
+    cursor: default;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+    line-height: 1.2;
+    border-radius: 4px;
+    padding: 2px 5px;
+  }}
+  .word:hover {{
+    transform: scale(1.18);
+    opacity: 1 !important;
+  }}
+</style>
+</head>
+<body>
+<script>
+  const words = {words_json_bulk};
+  const maxFreq = {max_freq_b};
+  const minFreq = {min_freq_b};
+  const colors = [
+    '#00b0f0','#ff4b4b','#f5a623','#7ed321','#bd10e0',
+    '#50e3c2','#ff6b6b','#4ecdc4','#ffe66d','#a78bfa'
+  ];
+
+  const body = document.body;
+  words.forEach((item, i) => {{
+    const span = document.createElement('span');
+    span.classList.add('word');
+    span.textContent = item.text;
+
+    const ratio = maxFreq === minFreq
+      ? 1
+      : (item.count - minFreq) / (maxFreq - minFreq);
+    const fontSize = Math.round(14 + ratio * 54);
+    span.style.fontSize = fontSize + 'px';
+    span.style.opacity = (0.55 + ratio * 0.45).toFixed(2);
+    span.style.color = colors[i % colors.length];
+    span.title = `"${{item.text}}" used ${{item.count}} time${{item.count > 1 ? 's' : ''}}`;
+
+    body.appendChild(span);
+  }});
+</script>
+</body>
+</html>
+"""
+                            components.html(html_bulk, height=300, scrolling=False)
+                        else:
+                            st.info("No words found after cleaning the uploaded reviews.")
+
+                        st.divider()
                         csv = user_df.to_csv(index=False).encode('utf-8')
                         st.download_button(
                             label="Download rich results as CSV",
