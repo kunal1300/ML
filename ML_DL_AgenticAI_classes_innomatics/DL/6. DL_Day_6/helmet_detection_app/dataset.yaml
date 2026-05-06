@@ -1,11 +1,10 @@
-path: C:\Users\kunal\Desktop\ml udemy\ML\ML_DL_AgenticAI_classes_innomatics\DL\6.
-  DL_Day_6\archive (6)
+path: ../archive (6)
 train: train/images
 val: valid/images
 test: test/images
 nc: 2
 names:
-- no_helmet
-- helmet
+  - no_helmet
+  - helmet
 
 
