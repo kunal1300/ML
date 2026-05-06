@@ -55,12 +55,11 @@ def rnn_predict(text):
     return tokenizer.index_word[np.argmax(pred)]
 
 def transformer_predict(text):
-    # BERT works better with this specific phrasing
+    # Appending a clarifying sentence is often more effective for BERT
     prompt = text.strip()
-    if "speak fluent" in prompt:
-        prompt = prompt.replace("speak fluent", "speak the language")
-    if "[MASK]" not in prompt:
-        prompt += " [MASK]"
+    if not prompt.endswith("."):
+        prompt += "."
+    prompt += " The language I speak is [MASK]."
     
     results = fill_mask(prompt, top_k=100)
     for r in results:
