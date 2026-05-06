@@ -131,13 +131,30 @@ GREEN = (16, 185, 129)   # helmet  → green
 RED   = (239, 68,  68)   # no helmet → red
 
 
-# ── Find best.pt ──────────────────────────────────────────────────────────────
+# ── Find model ──────────────────────────────────────────────────────────────
 def find_model() -> str | None:
-    search_dirs = [SCRIPT_DIR, SCRIPT_DIR.parent]
-    hits = []
-    for d in search_dirs:
-        hits += glob.glob(str(d / "**" / "best.pt"), recursive=True)
-    return max(hits, key=os.path.getmtime) if hits else None
+    # 1. Look for custom trained model in known locations
+    search_patterns = [
+        str(SCRIPT_DIR / "helmet_detection" / "run1" / "weights" / "best.pt"),
+        str(SCRIPT_DIR / "best.pt"),
+        "**/best.pt"
+    ]
+    
+    for pattern in search_patterns:
+        if "**" in pattern:
+            hits = glob.glob(str(SCRIPT_DIR / pattern), recursive=True)
+        else:
+            hits = glob.glob(pattern)
+        
+        if hits:
+            return max(hits, key=os.path.getmtime)
+    
+    # 2. Fallback to base model if it exists in root
+    base_model = SCRIPT_DIR / "yolov8n.pt"
+    if base_model.exists():
+        return str(base_model)
+        
+    return None
 
 
 # ── Load model (cached) ───────────────────────────────────────────────────────
@@ -246,28 +263,37 @@ with st.sidebar:
             st.session_state['trained'] = True
             st.rerun()
 
-    model_path = find_model()
-    if model_path:
-        st.success("✅ Model: Custom YOLOv8")
-        st.session_state['trained'] = True
-    else:
-        st.warning("⚠️ No trained model found.")
-        st.session_state['trained'] = False
-
-# Load model if trained
-if st.session_state.get('trained', False):
-    model_path = find_model()
-    if model_path:
-        mtime = os.path.getmtime(model_path)
-        model = load_model(model_path, mtime)
-    else:
-        st.error("Model file missing after training. Please retrain.")
-        st.stop()
+# Auto-detect model on startup
+model_path = find_model()
+if model_path:
+    st.session_state['trained'] = True
+    mtime = os.path.getmtime(model_path)
+    model = load_model(model_path, mtime)
+    
+    # Show model info in sidebar
+    with st.sidebar:
+        model_name = os.path.basename(model_path)
+        st.success(f"✅ Active Model: `{model_name}`")
 else:
-    st.info("💡 Please click **'Train Model Now'** in the sidebar to begin.")
+    st.session_state['trained'] = False
+    with st.sidebar:
+        st.warning("⚠️ No model found. Please train or upload `best.pt`.")
+
+# ── Application Logic ────────────────────────────────────────────────────────
+if not st.session_state.get('trained', False):
+    st.info("👋 **Welcome!** No detection model was found in the project directory.")
+    st.markdown("""
+    To use this app, you can:
+    1. **Train the model** using the button in the sidebar (requires dataset).
+    2. **Upload a pre-trained `best.pt`** to the project folder.
+    """)
+    if st.button("🚀 Start Training Now", type="primary"):
+        if run_training():
+            st.session_state['trained'] = True
+            st.rerun()
     st.stop()
 
-# ── Main logic ───────────────────────────────────────────────────────────────
+# ── Inference View ──────────────────────────────────────────────────────────
 if option == "Image":
     uploaded = st.file_uploader("Upload an image", type=["jpg", "jpeg", "png"])
     if uploaded:
