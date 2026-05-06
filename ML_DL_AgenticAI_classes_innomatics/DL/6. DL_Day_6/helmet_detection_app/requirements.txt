@@ -1,8 +1,12 @@
 ultralytics
+libgl1
+libglib2.0-0
 streamlit
-opencv-python-headless
-pillow
-plotly
+yaml
+torch
+yolo
 numpy
-pandas
-pyyaml
+opencv
+pillow
+torchvision
+
