@@ -1,0 +1,14 @@
+libgl1
+libglib2.0-0
+streamlit
+yaml
+torch
+yolo
+numpy
+opencv
+pillow
+torchvision
+import cv2, shutil, time, tempfile
+import numpy as np
+import streamlit as st
+import os,glob,pathlib
