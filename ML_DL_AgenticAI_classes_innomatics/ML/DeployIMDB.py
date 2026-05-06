@@ -13,7 +13,7 @@ from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.metrics import accuracy_score, confusion_matrix
 import altair as alt
 
-st.set_page_config(page_title="Advanced IMDB Sentiment Dashboard", page_icon="🎬", layout="wide")
+st.set_page_config(page_title="Advanced Sentiment Dashboard", page_icon="🎬", layout="wide")
 
 @st.cache_resource
 def load_nltk_resources():
