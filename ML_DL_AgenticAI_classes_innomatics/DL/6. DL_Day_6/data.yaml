@@ -7,3 +7,21 @@ nc: 2
 names:
 - no_helmet
 - helmet
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - glib
+  - libgl-devel
+  - pip
+  - pip:
+    - --extra-index-url https://download.pytorch.org/whl/cpu
+    - torch
+    - torchvision
+    - ultralytics
+    - streamlit
+    - opencv-python-headless
+    - numpy
+    - pillow
+    - pyyaml
