@@ -1,9 +1,0 @@
---extra-index-url https://download.pytorch.org/whl/cpu
-ultralytics
-streamlit
-opencv-python-headless
-pillow
-numpy
-torch
-torchvision
-pyyaml
