@@ -7,4 +7,16 @@ numpy
 torch
 torchvision
 pyyaml
-
+libgl1
+ffmpeg
+io
+os 
+glob
+time
+pathlib
+tempfile
+shutil
+sys
+cv2
+Image
+yaml
