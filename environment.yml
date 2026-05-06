@@ -1,4 +1,4 @@
-name: object_detection
+name: helmet_detection
 channels:
   - conda-forge
   - defaults
@@ -6,7 +6,6 @@ dependencies:
   - python=3.10
   - glib
   - libgl-devel
-  - av
   - pip
   - pip:
     - --extra-index-url https://download.pytorch.org/whl/cpu
@@ -17,9 +16,4 @@ dependencies:
     - opencv-python-headless
     - numpy
     - pillow
-    - pandas
-    - streamlit-webrtc
-    - tornado<6.2
-    - nltk
-    - scikit-learn
-    - altair
+    - pyyaml
