@@ -9,9 +9,11 @@ Run:
     streamlit run app.py
 """
 
-import io, os, glob, time, pathlib, tempfile, shutil
+import io, os, glob, time, pathlib, tempfile, shutil, sys
 import cv2, numpy as np
 import streamlit as st
+import yaml
+import torch
 from PIL import Image
 
 # ── Page config ──────────────────────────────────────────────────────────────
@@ -58,6 +60,64 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 .violation-title { color: #f87171; font-weight: 700; margin-top: 2rem; border-bottom: 1px solid #450a0a; padding-bottom: 5px; }
 </style>
 """, unsafe_allow_html=True)
+
+# ── Training Logic (Integrated from train_helmet.py) ─────────────────────────
+def create_dataset_yaml(dataset_root, yaml_path):
+    cfg = {
+        "path":  str(dataset_root),
+        "train": "train/images",
+        "val":   "valid/images",
+        "test":  "test/images",
+        "nc":    2,
+        "names": ["no_helmet", "helmet"],
+    }
+    with open(yaml_path, "w") as f:
+        yaml.dump(cfg, f, default_flow_style=False, sort_keys=False)
+    return str(yaml_path)
+
+def get_device():
+    if torch.cuda.is_available():
+        return 0
+    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
+
+def run_training():
+    from ultralytics import YOLO
+    dataset_root = SCRIPT_DIR.parent / "archive (6)"
+    yaml_path = SCRIPT_DIR / "dataset.yaml"
+    
+    if not dataset_root.exists():
+        st.error(f"Dataset not found at {dataset_root}. Please ensure the 'archive (6)' folder exists.")
+        return False
+
+    create_dataset_yaml(dataset_root, yaml_path)
+    device = get_device()
+    
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
+    status_text.info("🚀 Loading base YOLOv8n model...")
+    model = YOLO("yolov8n.pt")
+    
+    status_text.info("🏋️ Training started (this may take a few minutes)...")
+    
+    results = model.train(
+        data      = str(yaml_path),
+        epochs    = 5, 
+        imgsz     = 640,
+        batch     = 16,
+        project   = str(SCRIPT_DIR / "helmet_detection"),
+        name      = "run1",
+        exist_ok  = True,
+        device    = device,
+        workers   = 0,
+        verbose   = True
+    )
+    
+    progress_bar.progress(100)
+    status_text.success("✅ Training Complete!")
+    return True
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 SCRIPT_DIR = pathlib.Path(__file__).parent.resolve()
@@ -172,6 +232,7 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("### 📸 Capture Settings")
     auto_capture = st.checkbox("Auto-Capture Violations", value=True, help="Automatically save screenshots of people without helmets")
+    always_train = st.checkbox("🔄 Always Train before Inference", value=False, help="Runs a quick training session before every detection")
     
     if st.button("🗑️ Clear All Violations"):
         for f in VIOLATIONS_DIR.glob("*.jpg"):
@@ -179,16 +240,32 @@ with st.sidebar:
         st.rerun()
 
     st.markdown("---")
+    st.markdown("### 🛠️ Model Management")
+    if st.button("🚀 Train Model Now", help="Always train the model before detection"):
+        if run_training():
+            st.session_state['trained'] = True
+            st.rerun()
+
     model_path = find_model()
     if model_path:
         st.success("✅ Model: Custom YOLOv8")
+        st.session_state['trained'] = True
     else:
-        st.error("❌ No trained model found")
-        st.stop()
+        st.warning("⚠️ No trained model found.")
+        st.session_state['trained'] = False
 
-# Load model
-mtime = os.path.getmtime(model_path)
-model = load_model(model_path, mtime)
+# Load model if trained
+if st.session_state.get('trained', False):
+    model_path = find_model()
+    if model_path:
+        mtime = os.path.getmtime(model_path)
+        model = load_model(model_path, mtime)
+    else:
+        st.error("Model file missing after training. Please retrain.")
+        st.stop()
+else:
+    st.info("💡 Please click **'Train Model Now'** in the sidebar to begin.")
+    st.stop()
 
 # ── Main logic ───────────────────────────────────────────────────────────────
 if option == "Image":
@@ -200,6 +277,14 @@ if option == "Image":
             st.image(pil_img, caption="Original Stream", use_container_width=True)
         
         with st.spinner("Processing..."):
+            if always_train:
+                with st.expander("🛠️ Performing Quick Training...", expanded=True):
+                    run_training()
+                # Reload model after training
+                model_path = find_model()
+                mtime = os.path.getmtime(model_path)
+                model = load_model(model_path, mtime)
+            
             res_img, n_with, n_without, ms = detect_image(model, pil_img, conf, save_violations=auto_capture)
         
         with col2:
@@ -231,6 +316,17 @@ else:
             if not ret:
                 break
             
+            if always_train:
+                # For video, training before every frame is impossible, 
+                # so we train once at the start of the video.
+                with st.spinner("🛠️ Training before video processing..."):
+                    run_training()
+                # Reload model
+                model_path = find_model()
+                mtime = os.path.getmtime(model_path)
+                model = load_model(model_path, mtime)
+                always_train = False # Only train once per video session to keep it usable
+                
             results = model.predict(source=frame, conf=conf, iou=0.45, verbose=False)
             processed_frame, n_with, n_without = draw_detections(model, frame, results, conf, save_violations=auto_capture)
             
