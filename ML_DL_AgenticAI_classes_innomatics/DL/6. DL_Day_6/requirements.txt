@@ -1,8 +1,0 @@
-ultralytics
-streamlit
-opencv-python-headless
-pillow
-plotly
-numpy
-pandas
-pyyaml

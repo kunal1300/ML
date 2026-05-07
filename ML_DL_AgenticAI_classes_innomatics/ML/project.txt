@@ -1,0 +1,17 @@
+# 1. Sentiment Analysis App (Movie/Product Reviews)
+# --> review: positive or negative
+# 2. Fake News Detection System
+# --> Fake / Real
+# 3. Resume Classification System
+# After uploading resume, automatically classify into categories, whether it is Data science, Web development, Marketing
+# 4. Customer Support Ticket Classifier
+# classify customer queries into: Billing, technical issues, general query
+# 5. Toxic comment detection
+# dataset -->social media comments dataset
+# detect whether it is Toxic/safe
+# Tag:
+# Manohar Chary V
+# Raghu ram aduri
+# Vishwanath nyathani
+# Kalpana katiki reddy
+# Innomatics research labs

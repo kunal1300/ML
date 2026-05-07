@@ -17,4 +17,3 @@ dependencies:
     - numpy
     - pillow
     - pyyaml
-    - streamlit-webrtc
