@@ -84,11 +84,15 @@ def get_device():
 
 def run_training():
     from ultralytics import YOLO
-    dataset_root = SCRIPT_DIR.parent / "archive (6)"
+    # Try to find the dataset folder in current dir or parent dir
+    dataset_root = SCRIPT_DIR / "archive (6)"
+    if not dataset_root.exists():
+        dataset_root = SCRIPT_DIR.parent / "archive (6)"
+    
     yaml_path = SCRIPT_DIR / "dataset.yaml"
     
     if not dataset_root.exists():
-        st.error(f"Dataset not found at {dataset_root}. Please ensure the 'archive (6)' folder exists.")
+        st.error(f"Dataset not found. Please ensure the 'archive (6)' folder exists in {SCRIPT_DIR} or its parent.")
         return False
 
     create_dataset_yaml(dataset_root, yaml_path)
@@ -105,8 +109,8 @@ def run_training():
     results = model.train(
         data      = str(yaml_path),
         epochs    = 5, 
-        imgsz     = 640,
-        batch     = 16,
+        imgsz     = 320,
+        batch     = 32,
         project   = str(SCRIPT_DIR / "helmet_detection"),
         name      = "run1",
         exist_ok  = True,
@@ -127,8 +131,8 @@ VIOLATIONS_DIR.mkdir(exist_ok=True)
 # Class mapping from the trained model:
 HELMET_CLASSES    = {1, "1", "helmet",    "Helmet",    "WITH HELMET"}
 NO_HELMET_CLASSES = {0, "0", "no_helmet", "No Helmet", "WITHOUT HELMET"}
-GREEN = (16, 185, 129)   # helmet  → green
-RED   = (239, 68,  68)   # no helmet → red
+GREEN = (16, 185, 129)   # helmet  -> green (RGB)
+RED   = (239, 68,  68)   # no helmet -> red (RGB)
 
 
 # ── Find model ──────────────────────────────────────────────────────────────
@@ -174,12 +178,22 @@ def draw_detections(model, img_bgr, results, conf: float, save_violations=False)
     clean_frame = img_bgr.copy()
 
     for r in results:
+        if not hasattr(r, 'boxes') or r.boxes is None:
+            continue
+            
         for box in r.boxes:
-            cls_id = int(box.cls[0])
-            conf_v = float(box.conf[0])
-            x1, y1, x2, y2 = map(int, box.xyxy[0])
+            # Extract box data safely
+            cls_id = int(box.cls[0].item())
+            conf_v = float(box.conf[0].item())
+            coords = box.xyxy[0].cpu().numpy().astype(int)
+            x1, y1, x2, y2 = coords
 
-            raw = model.names.get(cls_id, str(cls_id))
+            # Get class name safely (handles dict or list)
+            if isinstance(model.names, dict):
+                raw = model.names.get(cls_id, str(cls_id))
+            else:
+                try: raw = model.names[cls_id]
+                except: raw = str(cls_id)
 
             if cls_id in HELMET_CLASSES or raw in HELMET_CLASSES:
                 label = "With Helmet"
@@ -192,7 +206,6 @@ def draw_detections(model, img_bgr, results, conf: float, save_violations=False)
                 
                 # Save violation screenshot
                 if save_violations:
-                    # Pad the crop slightly
                     px, py = 20, 20
                     vx1, vy1 = max(0, x1-px), max(0, y1-py)
                     vx2, vy2 = min(w, x2+px), min(h, y2+py)
@@ -206,31 +219,44 @@ def draw_detections(model, img_bgr, results, conf: float, save_violations=False)
             else:
                 continue
 
-            bgr = (color[2], color[1], color[0])
+            # Draw
+            bgr_color = (int(color[2]), int(color[1]), int(color[0]))
             thick = max(2, w // 400)
-            cv2.rectangle(img_bgr, (x1, y1), (x2, y2), bgr, thick)
+            cv2.rectangle(img_bgr, (x1, y1), (x2, y2), bgr_color, thick)
 
             text = f"{label} {conf_v:.0%}"
-            fs = max(0.45, w / 2000)
+            fs = max(0.45, w / 1800)
             ft = max(1, thick - 1)
             (tw, th), bl = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, fs, ft)
-            ty1 = max(y1 - th - bl - 6, 0)
-            ty2 = ty1 + th + bl + 6
-            cv2.rectangle(img_bgr, (x1, ty1), (x1 + tw + 8, ty2), bgr, -1)
-            cv2.putText(img_bgr, text, (x1 + 4, ty2 - bl - 2),
+            
+            ty1 = max(y1 - th - bl - 10, 0)
+            ty2 = ty1 + th + bl + 10
+            cv2.rectangle(img_bgr, (x1, ty1), (x1 + tw + 10, ty2), bgr_color, -1)
+            cv2.putText(img_bgr, text, (x1 + 5, ty2 - bl - 5),
                         cv2.FONT_HERSHEY_SIMPLEX, fs, (255, 255, 255), ft, cv2.LINE_AA)
     
     return img_bgr, with_helmet, without_helmet
 
 
 def detect_image(model, pil_img: Image.Image, conf: float, save_violations=False):
-    img_bgr = cv2.cvtColor(np.array(pil_img.convert("RGB")), cv2.COLOR_RGB2BGR)
+    # Ensure image is RGB for YOLO and BGR for OpenCV
+    img_array = np.array(pil_img.convert("RGB"))
+    img_bgr = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
+    
     t0 = time.perf_counter()
-    results = model.predict(source=pil_img, conf=conf, iou=0.45, verbose=False)
+    results = model.predict(source=img_array, conf=conf, iou=0.45, verbose=False)
     ms = (time.perf_counter() - t0) * 1000
     
     processed_bgr, n_with, n_without = draw_detections(model, img_bgr, results, conf, save_violations)
-    out = Image.fromarray(cv2.cvtColor(processed_bgr, cv2.COLOR_BGR2RGB))
+    
+    # Safety conversion back to RGB for Streamlit
+    try:
+        processed_rgb = cv2.cvtColor(processed_bgr, cv2.COLOR_BGR2RGB)
+        out = Image.fromarray(processed_rgb)
+    except Exception as e:
+        st.error(f"Error converting output image: {e}")
+        out = pil_img # Fallback to original
+        
     return out, n_with, n_without, ms
 
 
@@ -297,7 +323,11 @@ if not st.session_state.get('trained', False):
 if option == "Image":
     uploaded = st.file_uploader("Upload an image", type=["jpg", "jpeg", "png"])
     if uploaded:
-        pil_img = Image.open(uploaded).convert("RGB")
+        try:
+            pil_img = Image.open(uploaded).convert("RGB")
+        except Exception as e:
+            st.error(f"❌ Error opening image: {e}")
+            st.stop()
         col1, col2 = st.columns(2)
         with col1:
             st.image(pil_img, caption="Original Stream", use_container_width=True)
@@ -353,11 +383,17 @@ else:
                 model = load_model(model_path, mtime)
                 always_train = False # Only train once per video session to keep it usable
                 
-            results = model.predict(source=frame, conf=conf, iou=0.45, verbose=False)
+            # YOLO expects RGB usually, but vf.read() gives BGR
+            # Let's convert to RGB for prediction to be safe
+            frame_rgb_input = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            results = model.predict(source=frame_rgb_input, conf=conf, iou=0.45, verbose=False)
+            
+            # draw_detections works on BGR frame
             processed_frame, n_with, n_without = draw_detections(model, frame, results, conf, save_violations=auto_capture)
             
-            frame_rgb = cv2.cvtColor(processed_frame, cv2.COLOR_BGR2RGB)
-            st_frame.image(frame_rgb, use_container_width=True)
+            # Display result
+            display_rgb = cv2.cvtColor(processed_frame, cv2.COLOR_BGR2RGB)
+            st_frame.image(display_rgb, use_container_width=True)
             
             count_placeholder.markdown(f"""
             <div style='display: flex; gap: 20px; justify-content: center; margin-bottom: 20px;'>
@@ -383,7 +419,12 @@ if v_files:
     cols = st.columns(4)
     for idx, v_file in enumerate(v_files):
         with cols[idx % 4]:
-            st.image(str(v_file), use_container_width=True)
-            st.caption(f"Time: {v_file.stem.split('_')[1]}")
+            try:
+                st.image(str(v_file), use_container_width=True)
+                parts = v_file.stem.split('_')
+                time_str = parts[1] if len(parts) > 1 else "Unknown"
+                st.caption(f"Time: {time_str}")
+            except Exception:
+                st.error("Error loading image")
 else:
     st.info("No violations captured yet. Upload an image/video with people not wearing helmets.")

@@ -36,8 +36,10 @@ except ImportError:
     sys.exit(1)
 
 # ── 2. Paths ────────────────────────────────────────────────────────────────
-SCRIPT_DIR   = pathlib.Path(__file__).parent.resolve()
-DATASET_ROOT = SCRIPT_DIR.parent / "archive (6)"   # adjust if different
+# Try to find the dataset folder in current dir or parent dir
+DATASET_ROOT = SCRIPT_DIR / "archive (6)"
+if not DATASET_ROOT.exists():
+    DATASET_ROOT = SCRIPT_DIR.parent / "archive (6)"
 YAML_PATH    = SCRIPT_DIR / "dataset.yaml"
 WEIGHTS_DIR  = SCRIPT_DIR / "helmet_detection" / "run1" / "weights"
 
