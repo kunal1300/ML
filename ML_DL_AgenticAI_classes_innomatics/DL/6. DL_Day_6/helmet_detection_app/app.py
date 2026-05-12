@@ -69,7 +69,7 @@ def create_dataset_yaml(dataset_root, yaml_path):
         "val":   "valid/images",
         "test":  "test/images",
         "nc":    2,
-        "names": ["no_helmet", "helmet"],
+        "names": ["helmet", "no_helmet"],
     }
     with open(yaml_path, "w") as f:
         yaml.dump(cfg, f, default_flow_style=False, sort_keys=False)
@@ -109,8 +109,8 @@ def run_training():
     results = model.train(
         data      = str(yaml_path),
         epochs    = 5, 
-        imgsz     = 320,
-        batch     = 32,
+        imgsz     = 640,
+        batch     = 8,
         project   = str(SCRIPT_DIR / "helmet_detection"),
         name      = "run1",
         exist_ok  = True,
@@ -128,9 +128,9 @@ SCRIPT_DIR = pathlib.Path(__file__).parent.resolve()
 VIOLATIONS_DIR = SCRIPT_DIR / "violations"
 VIOLATIONS_DIR.mkdir(exist_ok=True)
 
-# Class mapping from the trained model:
-HELMET_CLASSES    = {1, "1", "helmet",    "Helmet",    "WITH HELMET"}
-NO_HELMET_CLASSES = {0, "0", "no_helmet", "No Helmet", "WITHOUT HELMET"}
+# Default class mapping (may be swapped via UI)
+DEFAULT_HELMET_CLASSES    = {0, "0", "helmet",    "Helmet",    "WITH HELMET"}
+DEFAULT_NO_HELMET_CLASSES = {1, "1", "no_helmet", "No Helmet", "WITHOUT HELMET"}
 GREEN = (16, 185, 129)   # helmet  -> green (RGB)
 RED   = (239, 68,  68)   # no helmet -> red (RGB)
 
@@ -169,11 +169,17 @@ def load_model(path: str, mtime: float):
 
 
 # ── Detection logic ───────────────────────────────────────────────────────────
-def draw_detections(model, img_bgr, results, conf: float, save_violations=False):
+def draw_detections(model, img_bgr, results, conf: float, save_violations=False, swap_classes=False):
     h, w = img_bgr.shape[:2]
     with_helmet = 0
     without_helmet = 0
     
+    # Resolve classes based on swap toggle
+    if not swap_classes:
+        h_set, nh_set = DEFAULT_HELMET_CLASSES, DEFAULT_NO_HELMET_CLASSES
+    else:
+        h_set, nh_set = DEFAULT_NO_HELMET_CLASSES, DEFAULT_HELMET_CLASSES
+
     # Create a copy for saving clean crops if needed
     clean_frame = img_bgr.copy()
 
@@ -195,11 +201,11 @@ def draw_detections(model, img_bgr, results, conf: float, save_violations=False)
                 try: raw = model.names[cls_id]
                 except: raw = str(cls_id)
 
-            if cls_id in HELMET_CLASSES or raw in HELMET_CLASSES:
+            if cls_id in h_set or raw in h_set:
                 label = "With Helmet"
                 color = GREEN
                 with_helmet += 1
-            elif cls_id in NO_HELMET_CLASSES or raw in NO_HELMET_CLASSES:
+            elif cls_id in nh_set or raw in nh_set:
                 label = "Without Helmet"
                 color = RED
                 without_helmet += 1
@@ -221,33 +227,36 @@ def draw_detections(model, img_bgr, results, conf: float, save_violations=False)
 
             # Draw
             bgr_color = (int(color[2]), int(color[1]), int(color[0]))
-            thick = max(2, w // 400)
+            thick = max(2, w // 300)
             cv2.rectangle(img_bgr, (x1, y1), (x2, y2), bgr_color, thick)
 
             text = f"{label} {conf_v:.0%}"
-            fs = max(0.45, w / 1800)
+            fs = max(0.5, w / 1500)
             ft = max(1, thick - 1)
             (tw, th), bl = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, fs, ft)
             
-            ty1 = max(y1 - th - bl - 10, 0)
-            ty2 = ty1 + th + bl + 10
-            cv2.rectangle(img_bgr, (x1, ty1), (x1 + tw + 10, ty2), bgr_color, -1)
-            cv2.putText(img_bgr, text, (x1 + 5, ty2 - bl - 5),
+            # Label background
+            ty1 = max(y1 - th - bl - 12, 0)
+            ty2 = ty1 + th + bl + 12
+            cv2.rectangle(img_bgr, (x1, ty1), (x1 + tw + 12, ty2), bgr_color, -1)
+            # Label text
+            cv2.putText(img_bgr, text, (x1 + 6, ty2 - bl - 6),
                         cv2.FONT_HERSHEY_SIMPLEX, fs, (255, 255, 255), ft, cv2.LINE_AA)
     
     return img_bgr, with_helmet, without_helmet
 
 
-def detect_image(model, pil_img: Image.Image, conf: float, save_violations=False):
+def detect_image(model, pil_img: Image.Image, conf: float, save_violations=False, swap_classes=False, imgsz=640):
     # Ensure image is RGB for YOLO and BGR for OpenCV
     img_array = np.array(pil_img.convert("RGB"))
     img_bgr = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
     
     t0 = time.perf_counter()
-    results = model.predict(source=img_array, conf=conf, iou=0.45, verbose=False)
+    # Use specified imgsz for inference
+    results = model.predict(source=img_array, conf=conf, imgsz=imgsz, iou=0.45, verbose=False)
     ms = (time.perf_counter() - t0) * 1000
     
-    processed_bgr, n_with, n_without = draw_detections(model, img_bgr, results, conf, save_violations)
+    processed_bgr, n_with, n_without = draw_detections(model, img_bgr, results, conf, save_violations, swap_classes)
     
     # Safety conversion back to RGB for Streamlit
     try:
@@ -270,11 +279,13 @@ st.markdown('<p class="sub">AI-Powered Compliance Monitoring & Violation Capture
 with st.sidebar:
     st.markdown("## ⚙️ Control Panel")
     option = st.selectbox("Select Input Type", ["Image", "Video"], index=0)
-    conf = st.slider("Confidence threshold", 0.05, 1.00, 0.20, 0.05)
+    conf = st.slider("Confidence threshold", 0.01, 1.00, 0.15, 0.01)
+    inf_imgsz = st.select_slider("Inference Resolution", options=[320, 480, 640, 800, 1024], value=640)
     
     st.markdown("---")
     st.markdown("### 📸 Capture Settings")
     auto_capture = st.checkbox("Auto-Capture Violations", value=True, help="Automatically save screenshots of people without helmets")
+    swap_labels = st.checkbox("🔄 Swap Helmet/No-Helmet Labels", value=False, help="Toggle this if 'Safe' and 'Violation' labels are inverted")
     always_train = st.checkbox("🔄 Always Train before Inference", value=False, help="Runs a quick training session before every detection")
     
     if st.button("🗑️ Clear All Violations"):
@@ -341,10 +352,20 @@ if option == "Image":
                 mtime = os.path.getmtime(model_path)
                 model = load_model(model_path, mtime)
             
-            res_img, n_with, n_without, ms = detect_image(model, pil_img, conf, save_violations=auto_capture)
+            res_img, n_with, n_without, ms = detect_image(model, pil_img, conf, 
+                                                         save_violations=auto_capture, 
+                                                         swap_classes=swap_labels,
+                                                         imgsz=inf_imgsz)
         
         with col2:
             st.image(res_img, caption="Detection Result", use_container_width=True)
+            if n_with == 0 and n_without == 0:
+                st.warning("No helmets or persons detected. Try lowering the confidence threshold or changing the inference resolution.")
+            
+            with st.expander("🔍 Model Diagnostics"):
+                st.write(f"**Model Path:** `{model_path}`")
+                st.write(f"**Model Classes:** `{model.names}`")
+                st.info(f"Currently mapping Class {0 if not swap_labels else 1} to 'Safe' and Class {1 if not swap_labels else 0} to 'Violation'.")
 
         # Result Cards
         st.markdown("### 📊 Real-time Stats")
@@ -386,10 +407,10 @@ else:
             # YOLO expects RGB usually, but vf.read() gives BGR
             # Let's convert to RGB for prediction to be safe
             frame_rgb_input = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            results = model.predict(source=frame_rgb_input, conf=conf, iou=0.45, verbose=False)
+            results = model.predict(source=frame_rgb_input, conf=conf, imgsz=640, iou=0.45, verbose=False)
             
             # draw_detections works on BGR frame
-            processed_frame, n_with, n_without = draw_detections(model, frame, results, conf, save_violations=auto_capture)
+            processed_frame, n_with, n_without = draw_detections(model, frame, results, conf, save_violations=auto_capture, swap_classes=swap_labels)
             
             # Display result
             display_rgb = cv2.cvtColor(processed_frame, cv2.COLOR_BGR2RGB)
